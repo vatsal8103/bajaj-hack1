@@ -12,6 +12,64 @@ css = """
     padding: 1rem;
 }
 
+/* Sidebar Styles */
+.sidebar .sidebar-content {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    padding: 1rem;
+}
+
+.sidebar-header {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: white;
+    text-align: center;
+    margin-bottom: 1rem;
+    padding: 0.8rem;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+}
+
+.session-item {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 0.8rem;
+    margin-bottom: 0.5rem;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.session-item:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.current-session {
+    background: rgba(255, 255, 255, 0.25) !important;
+    border: 2px solid rgba(255, 255, 255, 0.4) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.session-time {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.7);
+    text-align: center;
+    margin-top: 0.3rem;
+}
+
+/* Current Session Indicator */
+.current-session-indicator {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    text-align: center;
+    margin-bottom: 1rem;
+    font-weight: 500;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
 /* Header Styling */
 .main-header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -78,7 +136,7 @@ css = """
     background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
 }
 
-/* Fixed Upload Modal - Removed overlay issues */
+/* Upload Modal */
 .upload-modal-container {
     position: relative;
     z-index: 1000;
@@ -170,7 +228,7 @@ css = """
     border: 1px solid rgba(102, 126, 234, 0.1);
 }
 
-/* Status Indicators with Subtle Colors */
+/* Status Indicators */
 .status-indicator {
     padding: 0.6rem 1.2rem;
     border-radius: 15px;
@@ -254,37 +312,6 @@ css = """
     margin-bottom: 0;
 }
 
-/* Response Length Pills */
-.length-pills {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-bottom: 1rem;
-}
-
-.length-pill {
-    background: rgba(102, 126, 234, 0.1);
-    color: #667eea;
-    border: 1px solid rgba(102, 126, 234, 0.2);
-    border-radius: 20px;
-    padding: 0.4rem 0.8rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.length-pill.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-color: #667eea;
-}
-
-.length-pill:hover {
-    background: rgba(102, 126, 234, 0.2);
-    transform: translateY(-1px);
-}
-
 /* Typing Indicator */
 .typing-indicator {
     display: flex;
@@ -324,21 +351,6 @@ css = """
         transform: scale(1);
         opacity: 1;
     }
-}
-
-/* File Upload Styling */
-.upload-section {
-    background: rgba(102, 126, 234, 0.05);
-    border: 2px dashed rgba(102, 126, 234, 0.2);
-    border-radius: 10px;
-    padding: 1rem;
-    margin-bottom: 1rem;
-    transition: all 0.3s ease;
-}
-
-.upload-section:hover {
-    border-color: rgba(102, 126, 234, 0.4);
-    background: rgba(102, 126, 234, 0.1);
 }
 
 /* Animations */
