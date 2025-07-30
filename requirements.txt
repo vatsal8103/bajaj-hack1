@@ -1,0 +1,15 @@
+# requirements.txt
+
+streamlit
+python-dotenv
+PyPDF2
+langchain
+sentence-transformers
+chromadb
+
+torch
+transformers
+html2text
+unstructured
+pypdf
+unstructured[local-inference]
