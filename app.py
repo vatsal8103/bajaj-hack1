@@ -18,11 +18,9 @@ import json
 from datetime import datetime
 from htmltemplates import css
 
-
 # Load environment variables
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
 
 # Page configuration
 st.set_page_config(
@@ -32,10 +30,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-
 # Load CSS
 st.markdown(css, unsafe_allow_html=True)
-
 
 # Chat Sessions Management
 class ChatSessionManager:
@@ -104,37 +100,24 @@ class ChatSessionManager:
             sessions[session_id]["last_updated"] = datetime.now().isoformat()
             self.save_sessions(sessions)
 
-
 # Initialize session manager
 session_manager = ChatSessionManager()
 
-
-# Enhanced auto-scroll JavaScript function - ChatGPT-like
+# Enhanced auto-scroll JavaScript function
 def add_auto_scroll():
-    """Enhanced JavaScript for ChatGPT-like auto-scrolling"""
+    """Enhanced JavaScript for auto-scrolling"""
     st.markdown("""
     <script>
     function scrollToLatestMessage() {
         const chatContainer = document.querySelector('.scrollable-chat-container');
         if (chatContainer) {
-            // Smooth scroll to bottom like ChatGPT
             chatContainer.scrollTo({
                 top: chatContainer.scrollHeight,
                 behavior: 'smooth'
             });
         }
-        
-        // Also find the last message and ensure it's visible
-        const lastMessage = document.querySelector('.chat-message:last-of-type');
-        if (lastMessage) {
-            lastMessage.scrollIntoView({
-                behavior: 'smooth',
-                block: 'end'
-            });
-        }
     }
     
-    // Observer for new messages - ChatGPT-style
     const observer = new MutationObserver(function(mutations) {
         let hasNewMessage = false;
         mutations.forEach(function(mutation) {
@@ -151,11 +134,10 @@ def add_auto_scroll():
         });
         
         if (hasNewMessage) {
-            setTimeout(scrollToLatestMessage, 100);
+            setTimeout(scrollToLatestMessage, 150);
         }
     });
     
-    // Start observing
     if (document.body) {
         observer.observe(document.body, {
             childList: true,
@@ -163,11 +145,9 @@ def add_auto_scroll():
         });
     }
     
-    // Initial scroll
     setTimeout(scrollToLatestMessage, 300);
     </script>
     """, unsafe_allow_html=True)
-
 
 # Initialize session state
 def init_session_state():
@@ -185,21 +165,17 @@ def init_session_state():
         "should_scroll": False,
         "sessions": {},
         "context_memory": {},
-        "new_message": False,
-        "chatgpt_mode": False  # New ChatGPT-like mode
+        "new_message": False
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
     
-    # Load sessions
     st.session_state.sessions = session_manager.load_sessions()
     
-    # Create initial session if none exists
     if not st.session_state.current_session_id and not st.session_state.sessions:
         st.session_state.current_session_id = session_manager.create_new_session()
         st.session_state.sessions = session_manager.load_sessions()
-
 
 def load_session(session_id):
     """Load a specific chat session"""
@@ -210,10 +186,8 @@ def load_session(session_id):
         st.session_state.chat_history = session_data.get("chat_history", [])
         st.session_state.processed_docs = session_data.get("processed_docs", False)
         
-        # Load context memory for this session
         if session_id not in st.session_state.context_memory:
             st.session_state.context_memory[session_id] = []
-
 
 def save_current_session():
     """Save current session data"""
@@ -224,7 +198,6 @@ def save_current_session():
             st.session_state.processed_docs
         )
 
-
 # Simple embedding function
 @st.cache_resource
 def create_simple_embeddings():
@@ -234,7 +207,6 @@ def create_simple_embeddings():
         return OpenAIEmbeddings()
     except:
         return None
-
 
 # Process documents
 @st.cache_data
@@ -280,7 +252,6 @@ def process_documents(pdf_docs, docx_docs, eml_docs, web_urls):
     )
     return text_splitter.split_text(full_text)
 
-
 @st.cache_resource
 def create_vectorstore(text_chunks):
     try:
@@ -293,7 +264,6 @@ def create_vectorstore(text_chunks):
         st.error(f"Embedding error: {str(e)}")
         return text_chunks
 
-
 def initialize_llm():
     return ChatGroq(
         model_name="llama3-70b-8192",
@@ -301,15 +271,12 @@ def initialize_llm():
         api_key=GROQ_API_KEY
     )
 
-
 def get_context_for_session(session_id, current_question):
     """Get relevant context from session memory"""
     if session_id not in st.session_state.context_memory:
         st.session_state.context_memory[session_id] = []
     
     context_memory = st.session_state.context_memory[session_id]
-    
-    # Get last 5 exchanges for context
     recent_context = context_memory[-10:] if len(context_memory) > 10 else context_memory
     
     if recent_context:
@@ -317,7 +284,6 @@ def get_context_for_session(session_id, current_question):
         return f"Previous conversation context:\n{context_str}\n\nCurrent question: {current_question}"
     
     return current_question
-
 
 def update_context_memory(session_id, question, answer):
     """Update context memory for the session"""
@@ -330,45 +296,11 @@ def update_context_memory(session_id, question, answer):
         "timestamp": datetime.now().isoformat()
     })
     
-    # Keep only last 20 exchanges to manage memory
     if len(st.session_state.context_memory[session_id]) > 20:
         st.session_state.context_memory[session_id] = st.session_state.context_memory[session_id][-20:]
 
-
-def get_chatgpt_like_answer(question, llm, length_pref="medium", context=None):
-    """Get ChatGPT-like conversational answer"""
-    if length_pref == "short":
-        format_instruction = "Provide a concise, helpful answer in a conversational tone, similar to ChatGPT. Keep it under 150 words."
-    elif length_pref == "long":
-        format_instruction = "Provide a detailed, comprehensive answer in a conversational and friendly tone, similar to ChatGPT. Include examples and explanations. Aim for 300-500 words."
-    else:
-        format_instruction = "Provide a well-structured, informative answer in a conversational tone, similar to ChatGPT. Aim for 200-300 words with good detail."
-    
-    # Include context if available
-    context_instruction = ""
-    if context and len(st.session_state.chat_history) > 0:
-        context_instruction = f"\nPrevious conversation context: {context}\n"
-    
-    prompt = f"""You are a helpful AI assistant similar to ChatGPT. Be conversational, friendly, and informative in your responses.
-{context_instruction}
-Question: {question}
-
-Instructions: {format_instruction}
-
-Please provide a helpful, accurate, and engaging response that feels natural and conversational:"""
-    
-    try:
-        response = llm.invoke(prompt)
-        return response.content.strip()
-    except Exception as e:
-        return f"I apologize, but I encountered an error while processing your question: {str(e)}"
-
-
 def get_general_knowledge_answer(question, llm, length_pref="medium", context=None):
     """Get general knowledge answer from LLM with context"""
-    if st.session_state.chatgpt_mode:
-        return get_chatgpt_like_answer(question, llm, length_pref, context)
-    
     if length_pref == "short":
         format_instruction = "Provide a concise, helpful answer in 100-200 words with clear bullet points"
     elif length_pref == "long":
@@ -376,7 +308,6 @@ def get_general_knowledge_answer(question, llm, length_pref="medium", context=No
     else:
         format_instruction = "Provide a well-structured, informative answer in 250-400 words with good detail and examples"
     
-    # Include context if available
     context_instruction = ""
     if context and len(st.session_state.chat_history) > 0:
         context_instruction = f"\nContext from previous conversation: {context}\n"
@@ -394,7 +325,6 @@ Please provide a helpful, accurate, and well-formatted response that considers t
         return response.content.strip()
     except Exception as e:
         return f"I apologize, but I encountered an error while processing your question: {str(e)}"
-
 
 def get_document_based_answer(question, vectorstore, llm, length_pref="medium", context=None):
     """Get document-based answer using vectorstore with context"""
@@ -445,7 +375,6 @@ Answer based on the document content considering the conversation context:"""
     except Exception as e:
         return get_general_knowledge_answer(question, llm, length_pref, context)
 
-
 def get_hybrid_answer(question, vectorstore, llm, length_pref="medium"):
     """Smart hybrid approach with context memory"""
     session_id = st.session_state.current_session_id
@@ -466,11 +395,9 @@ def get_hybrid_answer(question, vectorstore, llm, length_pref="medium"):
         answer = get_general_knowledge_answer(question, llm, length_pref, context)
         source = "general_knowledge"
     
-    # Update context memory
     update_context_memory(session_id, question, answer)
     
     return {"answer": answer, "source": source}
-
 
 def handle_user_input(user_question):
     typing_placeholder = st.empty()
@@ -501,10 +428,7 @@ def handle_user_input(user_question):
             {"type": "bot", "content": answer, "source": source}
         ])
         
-        # Save session after each interaction
         save_current_session()
-        
-        # Set flags for auto-scroll
         st.session_state.should_scroll = True
         st.session_state.new_message = True
         typing_placeholder.empty()
@@ -513,24 +437,18 @@ def handle_user_input(user_question):
         typing_placeholder.empty()
         st.error(f"Error generating response: {str(e)}")
 
-
 def display_chat_history():
-    """Display chat history with ChatGPT-like styling"""
+    """Display chat history with styling"""
     for i, message in enumerate(st.session_state.chat_history):
         if message["type"] == "user":
             st.markdown(f'<div class="chat-message user">{message["content"]}</div>', unsafe_allow_html=True)
         else:
             source = message.get("source", "unknown")
-            if not st.session_state.chatgpt_mode:
-                source_emoji = "📄" if source == "documents" else "🧠"
-                source_text = "From Documents" if source == "documents" else "General Knowledge"
-                
-                st.markdown(f'<div class="chat-message bot">{message["content"]}</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="source-indicator">{source_emoji} {source_text}</div>', unsafe_allow_html=True)
-            else:
-                # ChatGPT-like mode - no source indicators
-                st.markdown(f'<div class="chat-message bot chatgpt-style">{message["content"]}</div>', unsafe_allow_html=True)
-
+            source_emoji = "📄" if source == "documents" else "🧠"
+            source_text = "From Documents" if source == "documents" else "General Knowledge"
+            
+            st.markdown(f'<div class="chat-message bot">{message["content"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="source-indicator">{source_emoji} {source_text}</div>', unsafe_allow_html=True)
 
 def show_upload_modal():
     if st.session_state.show_upload:
@@ -584,7 +502,6 @@ def show_upload_modal():
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-
 def show_stats():
     if st.session_state.chat_history:
         total_messages = len(st.session_state.chat_history)
@@ -603,18 +520,14 @@ def show_stats():
     else:
         st.info("No conversation yet! Start chatting to see statistics.")
 
-
 def sidebar_chat_sessions():
     """Display chat sessions in sidebar"""
     with st.sidebar:
         st.markdown('<div class="sidebar-header">💬 Chat Sessions</div>', unsafe_allow_html=True)
         
-        # New Chat Button
         if st.button("➕ New Chat", key="new_chat_btn", help="Start a new chat session"):
-            # Save current session before creating new one
             save_current_session()
             
-            # Create new session
             new_session_id = session_manager.create_new_session()
             st.session_state.current_session_id = new_session_id
             st.session_state.chat_history = []
@@ -625,7 +538,6 @@ def sidebar_chat_sessions():
         
         st.markdown("---")
         
-        # Display existing sessions
         sessions = session_manager.load_sessions()
         
         if sessions:
@@ -633,7 +545,6 @@ def sidebar_chat_sessions():
                 session_name = session_data.get('name', 'Unnamed Chat')
                 last_updated = session_data.get('last_updated', '')
                 
-                # Format last updated
                 try:
                     from datetime import datetime
                     dt = datetime.fromisoformat(last_updated.replace('Z', '+00:00'))
@@ -641,7 +552,6 @@ def sidebar_chat_sessions():
                 except:
                     time_str = ''
                 
-                # Session container
                 is_current = session_id == st.session_state.current_session_id
                 
                 with st.container():
@@ -678,7 +588,6 @@ def sidebar_chat_sessions():
                             st.button("🔒", key=f"delete_disabled_{session_id}", 
                                     help="Cannot delete the last session", disabled=True)
                     
-                    # Edit mode
                     if st.session_state.get(f"edit_mode_{session_id}", False):
                         new_name = st.text_input("New name:", value=session_name, key=f"rename_{session_id}")
                         col_save, col_cancel = st.columns(2)
@@ -700,7 +609,6 @@ def sidebar_chat_sessions():
         else:
             st.info("No chat sessions yet. Create your first chat!")
 
-
 def create_fixed_input():
     """Create the fixed input bar at the bottom of the window"""
     st.markdown("""
@@ -708,7 +616,6 @@ def create_fixed_input():
         <div class="input-bar-container">
     """, unsafe_allow_html=True)
     
-    # Create columns for the input elements
     col1, col2, col3 = st.columns([0.06, 0.88, 0.06])
     
     with col1:
@@ -719,8 +626,7 @@ def create_fixed_input():
             st.rerun()
     
     with col2:
-        placeholder_text = "Message ChatGPT Assistant..." if st.session_state.chatgpt_mode else "Ask me anything..."
-        user_input = st.chat_input(placeholder_text, key="window_chat_input")
+        user_input = st.chat_input("Ask me anything...", key="window_chat_input")
     
     with col3:
         voice_clicked = st.button("🎤", key="voice_input_window", help="Voice", 
@@ -742,25 +648,21 @@ def create_fixed_input():
     
     return user_input
 
-
 def main():
     init_session_state()
     
     # Sidebar for chat sessions
     sidebar_chat_sessions()
     
-    # Header
-    header_title = "🤖 ChatGPT-like AI Assistant" if st.session_state.chatgpt_mode else "🤖 AI Chat Assistant"
-    header_desc = "ChatGPT-like experience • Smart responses • Context aware" if st.session_state.chatgpt_mode else "Smart document chat • Voice enabled • Context memory"
-    
-    st.markdown(f"""
+    # Header (STICKY)
+    st.markdown("""
     <div class="main-header">
-        <h1>{header_title}</h1>
-        <p>{header_desc}</p>
+        <h1>🤖 AI Chat Assistant</h1>
+        <p>Smart document chat • Voice enabled • Context memory</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Show current session info
+    # Show current session info (STICKY)
     if st.session_state.current_session_id:
         session_name = st.session_state.sessions.get(st.session_state.current_session_id, {}).get('name', 'Current Chat')
         st.markdown(f'<div class="current-session-indicator">📝 {session_name}</div>', unsafe_allow_html=True)
@@ -769,55 +671,40 @@ def main():
     col1, col2 = st.columns([2.8, 1.2])
     
     with col1:
-        # Main content area with scrollable chat
+        # SCROLLABLE CONTENT AREA - Only this scrolls
         st.markdown('<div class="scrollable-content-area">', unsafe_allow_html=True)
         
-        # Status (hidden in ChatGPT mode)
-        if not st.session_state.chatgpt_mode:
-            if st.session_state.processed_docs:
-                st.markdown('<div class="status-indicator status-ready">✅ Documents ready</div>', unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="status-indicator status-waiting">🧠 General knowledge mode</div>', unsafe_allow_html=True)
+        # Status (STICKY - shown above chat)
+        if st.session_state.processed_docs:
+            st.markdown('<div class="status-indicator status-ready">✅ Documents ready</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="status-indicator status-waiting">🧠 General knowledge mode</div>', unsafe_allow_html=True)
         
-        # Show upload modal
+        # Upload modal
         show_upload_modal()
         
-        # Display chat history in scrollable container
+        # SCROLLABLE CHAT CONTAINER - This is the main scrolling area
         st.markdown('<div class="scrollable-chat-container">', unsafe_allow_html=True)
         display_chat_history()
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Handle input
+        # FIXED INPUT BAR - Handle input (stays at bottom)
         user_question = create_fixed_input()
         if user_question:
             handle_user_input(user_question)
             st.rerun()
         
-        # Auto-scroll when new message is added
+        # Auto-scroll for new messages
         if st.session_state.should_scroll or st.session_state.new_message:
             add_auto_scroll()
             st.session_state.should_scroll = False
             st.session_state.new_message = False
     
     with col2:
-        # Compact right panel
-        st.markdown('<div class="compact-right-panel">', unsafe_allow_html=True)
-        
-        # ChatGPT Mode Toggle
-        st.markdown('<div class="compact-section">', unsafe_allow_html=True)
-        st.markdown('<div class="compact-title">🎯 Mode</div>', unsafe_allow_html=True)
-        
-        mode_text = "ChatGPT Mode: ON" if st.session_state.chatgpt_mode else "ChatGPT Mode: OFF"
-        mode_color = "success" if st.session_state.chatgpt_mode else "secondary"
-        
-        if st.button(f"🔄 {mode_text}", key="toggle_chatgpt_mode", 
-                    help="Toggle ChatGPT-like conversational mode"):
-            st.session_state.chatgpt_mode = not st.session_state.chatgpt_mode
-            st.rerun()
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+        # RIGHT PANEL (STICKY)
+        st.markdown('<div class="compact-right-panel sticky-right-panel">', unsafe_allow_html=True)
         
         # Response Length Section
         st.markdown('<div class="compact-section">', unsafe_allow_html=True)
@@ -846,13 +733,12 @@ def main():
         st.markdown('<div class="compact-section">', unsafe_allow_html=True)
         st.markdown('<div class="compact-title">⚡ Actions</div>', unsafe_allow_html=True)
         
-        if not st.session_state.chatgpt_mode:
-            if st.button("📋 Summary", key="quick_summary", help="Summarize documents"):
-                if st.session_state.processed_docs:
-                    handle_user_input("Please provide a comprehensive summary of all the uploaded documents")
-                    st.rerun()
-                else:
-                    st.warning("⚠️ Upload documents first")
+        if st.button("📋 Summary", key="quick_summary", help="Summarize documents"):
+            if st.session_state.processed_docs:
+                handle_user_input("Please provide a comprehensive summary of all the uploaded documents")
+                st.rerun()
+            else:
+                st.warning("⚠️ Upload documents first")
         
         if st.button("🗑️ Clear", key="clear_chat", help="Clear current chat"):
             st.session_state.chat_history = []
@@ -874,22 +760,20 @@ def main():
             else:
                 st.warning("⚠️ No chat history")
         
-        if not st.session_state.chatgpt_mode:
-            if st.button("📊 Stats", key="toggle_stats", help="Toggle statistics"):
-                st.session_state.show_stats = not st.session_state.show_stats
-                st.rerun()
+        if st.button("📊 Stats", key="toggle_stats", help="Toggle statistics"):
+            st.session_state.show_stats = not st.session_state.show_stats
+            st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Stats Section (hidden in ChatGPT mode)
-        if st.session_state.show_stats and not st.session_state.chatgpt_mode:
+        # Stats Section
+        if st.session_state.show_stats:
             st.markdown('<div class="compact-section">', unsafe_allow_html=True)
             st.markdown('<div class="compact-title">📈 Stats</div>', unsafe_allow_html=True)
             show_stats()
             st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
-
 
 if __name__ == '__main__':
     main()
