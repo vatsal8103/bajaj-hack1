@@ -18,9 +18,11 @@ import json
 from datetime import datetime
 from htmltemplates import css
 
+
 # Load environment variables
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
 
 # Page configuration
 st.set_page_config(
@@ -30,8 +32,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+
 # Load CSS
 st.markdown(css, unsafe_allow_html=True)
+
 
 # Chat Sessions Management
 class ChatSessionManager:
@@ -100,26 +104,70 @@ class ChatSessionManager:
             sessions[session_id]["last_updated"] = datetime.now().isoformat()
             self.save_sessions(sessions)
 
+
 # Initialize session manager
 session_manager = ChatSessionManager()
 
-# Add auto-scroll JavaScript function
+
+# Enhanced auto-scroll JavaScript function - ChatGPT-like
 def add_auto_scroll():
-    """Inject JavaScript to auto-scroll to bottom"""
+    """Enhanced JavaScript for ChatGPT-like auto-scrolling"""
     st.markdown("""
     <script>
-    function scrollToBottom() {
-        window.scrollTo({
-            top: document.body.scrollHeight,
-            behavior: 'smooth'
-        });
-        document.documentElement.scrollTop = document.documentElement.scrollHeight;
+    function scrollToLatestMessage() {
+        const chatContainer = document.querySelector('.scrollable-chat-container');
+        if (chatContainer) {
+            // Smooth scroll to bottom like ChatGPT
+            chatContainer.scrollTo({
+                top: chatContainer.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+        
+        // Also find the last message and ensure it's visible
+        const lastMessage = document.querySelector('.chat-message:last-of-type');
+        if (lastMessage) {
+            lastMessage.scrollIntoView({
+                behavior: 'smooth',
+                block: 'end'
+            });
+        }
     }
-    setTimeout(function() {
-        scrollToBottom();
-    }, 100);
+    
+    // Observer for new messages - ChatGPT-style
+    const observer = new MutationObserver(function(mutations) {
+        let hasNewMessage = false;
+        mutations.forEach(function(mutation) {
+            if (mutation.addedNodes.length > 0) {
+                for (let node of mutation.addedNodes) {
+                    if (node.nodeType === 1 && 
+                        (node.classList?.contains('chat-message') || 
+                         node.querySelector?.('.chat-message'))) {
+                        hasNewMessage = true;
+                        break;
+                    }
+                }
+            }
+        });
+        
+        if (hasNewMessage) {
+            setTimeout(scrollToLatestMessage, 100);
+        }
+    });
+    
+    // Start observing
+    if (document.body) {
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
+    
+    // Initial scroll
+    setTimeout(scrollToLatestMessage, 300);
     </script>
     """, unsafe_allow_html=True)
+
 
 # Initialize session state
 def init_session_state():
@@ -136,7 +184,9 @@ def init_session_state():
         "show_stats": False,
         "should_scroll": False,
         "sessions": {},
-        "context_memory": {}
+        "context_memory": {},
+        "new_message": False,
+        "chatgpt_mode": False  # New ChatGPT-like mode
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -149,6 +199,7 @@ def init_session_state():
     if not st.session_state.current_session_id and not st.session_state.sessions:
         st.session_state.current_session_id = session_manager.create_new_session()
         st.session_state.sessions = session_manager.load_sessions()
+
 
 def load_session(session_id):
     """Load a specific chat session"""
@@ -163,6 +214,7 @@ def load_session(session_id):
         if session_id not in st.session_state.context_memory:
             st.session_state.context_memory[session_id] = []
 
+
 def save_current_session():
     """Save current session data"""
     if st.session_state.current_session_id:
@@ -171,6 +223,7 @@ def save_current_session():
             st.session_state.chat_history,
             st.session_state.processed_docs
         )
+
 
 # Simple embedding function
 @st.cache_resource
@@ -181,6 +234,7 @@ def create_simple_embeddings():
         return OpenAIEmbeddings()
     except:
         return None
+
 
 # Process documents
 @st.cache_data
@@ -226,6 +280,7 @@ def process_documents(pdf_docs, docx_docs, eml_docs, web_urls):
     )
     return text_splitter.split_text(full_text)
 
+
 @st.cache_resource
 def create_vectorstore(text_chunks):
     try:
@@ -238,12 +293,14 @@ def create_vectorstore(text_chunks):
         st.error(f"Embedding error: {str(e)}")
         return text_chunks
 
+
 def initialize_llm():
     return ChatGroq(
         model_name="llama3-70b-8192",
         temperature=0.7,
         api_key=GROQ_API_KEY
     )
+
 
 def get_context_for_session(session_id, current_question):
     """Get relevant context from session memory"""
@@ -261,6 +318,7 @@ def get_context_for_session(session_id, current_question):
     
     return current_question
 
+
 def update_context_memory(session_id, question, answer):
     """Update context memory for the session"""
     if session_id not in st.session_state.context_memory:
@@ -276,8 +334,41 @@ def update_context_memory(session_id, question, answer):
     if len(st.session_state.context_memory[session_id]) > 20:
         st.session_state.context_memory[session_id] = st.session_state.context_memory[session_id][-20:]
 
+
+def get_chatgpt_like_answer(question, llm, length_pref="medium", context=None):
+    """Get ChatGPT-like conversational answer"""
+    if length_pref == "short":
+        format_instruction = "Provide a concise, helpful answer in a conversational tone, similar to ChatGPT. Keep it under 150 words."
+    elif length_pref == "long":
+        format_instruction = "Provide a detailed, comprehensive answer in a conversational and friendly tone, similar to ChatGPT. Include examples and explanations. Aim for 300-500 words."
+    else:
+        format_instruction = "Provide a well-structured, informative answer in a conversational tone, similar to ChatGPT. Aim for 200-300 words with good detail."
+    
+    # Include context if available
+    context_instruction = ""
+    if context and len(st.session_state.chat_history) > 0:
+        context_instruction = f"\nPrevious conversation context: {context}\n"
+    
+    prompt = f"""You are a helpful AI assistant similar to ChatGPT. Be conversational, friendly, and informative in your responses.
+{context_instruction}
+Question: {question}
+
+Instructions: {format_instruction}
+
+Please provide a helpful, accurate, and engaging response that feels natural and conversational:"""
+    
+    try:
+        response = llm.invoke(prompt)
+        return response.content.strip()
+    except Exception as e:
+        return f"I apologize, but I encountered an error while processing your question: {str(e)}"
+
+
 def get_general_knowledge_answer(question, llm, length_pref="medium", context=None):
     """Get general knowledge answer from LLM with context"""
+    if st.session_state.chatgpt_mode:
+        return get_chatgpt_like_answer(question, llm, length_pref, context)
+    
     if length_pref == "short":
         format_instruction = "Provide a concise, helpful answer in 100-200 words with clear bullet points"
     elif length_pref == "long":
@@ -303,6 +394,7 @@ Please provide a helpful, accurate, and well-formatted response that considers t
         return response.content.strip()
     except Exception as e:
         return f"I apologize, but I encountered an error while processing your question: {str(e)}"
+
 
 def get_document_based_answer(question, vectorstore, llm, length_pref="medium", context=None):
     """Get document-based answer using vectorstore with context"""
@@ -353,6 +445,7 @@ Answer based on the document content considering the conversation context:"""
     except Exception as e:
         return get_general_knowledge_answer(question, llm, length_pref, context)
 
+
 def get_hybrid_answer(question, vectorstore, llm, length_pref="medium"):
     """Smart hybrid approach with context memory"""
     session_id = st.session_state.current_session_id
@@ -377,6 +470,7 @@ def get_hybrid_answer(question, vectorstore, llm, length_pref="medium"):
     update_context_memory(session_id, question, answer)
     
     return {"answer": answer, "source": source}
+
 
 def handle_user_input(user_question):
     typing_placeholder = st.empty()
@@ -410,31 +504,38 @@ def handle_user_input(user_question):
         # Save session after each interaction
         save_current_session()
         
+        # Set flags for auto-scroll
         st.session_state.should_scroll = True
+        st.session_state.new_message = True
         typing_placeholder.empty()
         
     except Exception as e:
         typing_placeholder.empty()
         st.error(f"Error generating response: {str(e)}")
 
+
 def display_chat_history():
-    for message in st.session_state.chat_history:
+    """Display chat history with ChatGPT-like styling"""
+    for i, message in enumerate(st.session_state.chat_history):
         if message["type"] == "user":
             st.markdown(f'<div class="chat-message user">{message["content"]}</div>', unsafe_allow_html=True)
         else:
             source = message.get("source", "unknown")
-            source_emoji = "📄" if source == "documents" else "🧠"
-            source_text = "From Documents" if source == "documents" else "General Knowledge"
-            
-            st.markdown(f'<div class="chat-message bot">{message["content"]}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div style="text-align: left; margin-left: 0; font-size: 0.8rem; color: #667eea; margin-top: -0.5rem; margin-bottom: 1rem;">{source_emoji} {source_text}</div>', unsafe_allow_html=True)
-    
-    st.markdown('<div id="bottom-anchor"></div>', unsafe_allow_html=True)
+            if not st.session_state.chatgpt_mode:
+                source_emoji = "📄" if source == "documents" else "🧠"
+                source_text = "From Documents" if source == "documents" else "General Knowledge"
+                
+                st.markdown(f'<div class="chat-message bot">{message["content"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="source-indicator">{source_emoji} {source_text}</div>', unsafe_allow_html=True)
+            else:
+                # ChatGPT-like mode - no source indicators
+                st.markdown(f'<div class="chat-message bot chatgpt-style">{message["content"]}</div>', unsafe_allow_html=True)
+
 
 def show_upload_modal():
     if st.session_state.show_upload:
         with st.container():
-            st.markdown('<div class="upload-modal-container">', unsafe_allow_html=True)
+            st.markdown('<div class="upload-modal-overlay">', unsafe_allow_html=True)
             st.markdown('<div class="upload-modal">', unsafe_allow_html=True)
             
             st.markdown("### 📁 Upload Documents")
@@ -483,6 +584,7 @@ def show_upload_modal():
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
+
 def show_stats():
     if st.session_state.chat_history:
         total_messages = len(st.session_state.chat_history)
@@ -500,6 +602,7 @@ def show_stats():
         st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.info("No conversation yet! Start chatting to see statistics.")
+
 
 def sidebar_chat_sessions():
     """Display chat sessions in sidebar"""
@@ -551,7 +654,7 @@ def sidebar_chat_sessions():
                     
                     with col1:
                         if st.button(f"💬 {session_name}", key=f"load_{session_id}", help=f"Load session - {time_str}"):
-                            save_current_session()  # Save current before switching
+                            save_current_session()
                             load_session(session_id)
                             st.rerun()
                     
@@ -561,19 +664,19 @@ def sidebar_chat_sessions():
                             st.rerun()
                     
                     with col3:
-                        if st.button("🗑️", key=f"delete_{session_id}", help="Delete session"):
-                            if len(sessions) > 1:  # Keep at least one session
+                        if len(sessions) > 1:
+                            if st.button("🗑️", key=f"delete_{session_id}", help="Delete session"):
                                 session_manager.delete_session(session_id)
                                 if session_id == st.session_state.current_session_id:
-                                    # Switch to another session
                                     remaining_sessions = session_manager.load_sessions()
                                     if remaining_sessions:
                                         new_current = list(remaining_sessions.keys())[0]
                                         load_session(new_current)
                                 st.session_state.sessions = session_manager.load_sessions()
                                 st.rerun()
-                            else:
-                                st.warning("Cannot delete the last session!")
+                        else:
+                            st.button("🔒", key=f"delete_disabled_{session_id}", 
+                                    help="Cannot delete the last session", disabled=True)
                     
                     # Edit mode
                     if st.session_state.get(f"edit_mode_{session_id}", False):
@@ -597,6 +700,49 @@ def sidebar_chat_sessions():
         else:
             st.info("No chat sessions yet. Create your first chat!")
 
+
+def create_fixed_input():
+    """Create the fixed input bar at the bottom of the window"""
+    st.markdown("""
+    <div class="window-bottom-input">
+        <div class="input-bar-container">
+    """, unsafe_allow_html=True)
+    
+    # Create columns for the input elements
+    col1, col2, col3 = st.columns([0.06, 0.88, 0.06])
+    
+    with col1:
+        upload_clicked = st.button("📄", key="upload_toggle_window", help="Upload", 
+                                 use_container_width=True)
+        if upload_clicked:
+            st.session_state.show_upload = not st.session_state.show_upload
+            st.rerun()
+    
+    with col2:
+        placeholder_text = "Message ChatGPT Assistant..." if st.session_state.chatgpt_mode else "Ask me anything..."
+        user_input = st.chat_input(placeholder_text, key="window_chat_input")
+    
+    with col3:
+        voice_clicked = st.button("🎤", key="voice_input_window", help="Voice", 
+                                use_container_width=True)
+        if voice_clicked:
+            try:
+                r = sr.Recognizer()
+                with sr.Microphone() as source:
+                    st.info("🎤 Listening...")
+                    audio = r.listen(source, timeout=5)
+                user_question = r.recognize_google(audio)
+                st.success(f"✅ You said: '{user_question}'")
+                handle_user_input(user_question)
+                st.rerun()
+            except:
+                st.error("❌ Could not understand audio. Please try again.")
+    
+    st.markdown("</div></div>", unsafe_allow_html=True)
+    
+    return user_input
+
+
 def main():
     init_session_state()
     
@@ -604,10 +750,13 @@ def main():
     sidebar_chat_sessions()
     
     # Header
-    st.markdown("""
+    header_title = "🤖 ChatGPT-like AI Assistant" if st.session_state.chatgpt_mode else "🤖 AI Chat Assistant"
+    header_desc = "ChatGPT-like experience • Smart responses • Context aware" if st.session_state.chatgpt_mode else "Smart document chat • Voice enabled • Context memory"
+    
+    st.markdown(f"""
     <div class="main-header">
-        <h1>🤖 AI Chat Assistant</h1>
-        <p>Beautiful interface • Smart document chat • Voice enabled • General knowledge • Context memory</p>
+        <h1>{header_title}</h1>
+        <p>{header_desc}</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -617,114 +766,102 @@ def main():
         st.markdown(f'<div class="current-session-indicator">📝 {session_name}</div>', unsafe_allow_html=True)
     
     # Main layout
-    col1, col2 = st.columns([2.5, 1])
+    col1, col2 = st.columns([2.8, 1.2])
     
     with col1:
-        # Search container with small plus button
-        st.markdown('<div class="search-container">', unsafe_allow_html=True)
+        # Main content area with scrollable chat
+        st.markdown('<div class="scrollable-content-area">', unsafe_allow_html=True)
         
-        col_plus, col_input, col_voice = st.columns([0.4, 8, 1])
-        
-        with col_plus:
-            if st.button("➕", key="upload_toggle", help="Upload Documents"):
-                st.session_state.show_upload = not st.session_state.show_upload
-                st.rerun()
-        
-        with col_input:
-            user_question = st.chat_input("Ask me anything - I remember our conversation context...")
-        
-        with col_voice:
-            if st.button("🎤", key="voice_input", help="Voice Input"):
-                try:
-                    r = sr.Recognizer()
-                    with sr.Microphone() as source:
-                        st.info("🎤 Listening...")
-                        audio = r.listen(source, timeout=5)
-                    user_question = r.recognize_google(audio)
-                    st.success(f"✅ You said: '{user_question}'")
-                    handle_user_input(user_question)
-                    st.rerun()
-                except:
-                    st.error("❌ Could not understand audio. Please try again.")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Status (hidden in ChatGPT mode)
+        if not st.session_state.chatgpt_mode:
+            if st.session_state.processed_docs:
+                st.markdown('<div class="status-indicator status-ready">✅ Documents ready</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="status-indicator status-waiting">🧠 General knowledge mode</div>', unsafe_allow_html=True)
         
         # Show upload modal
         show_upload_modal()
         
-        # Status
-        if st.session_state.processed_docs:
-            st.markdown('<div class="status-indicator status-ready">✅ Documents ready! Context memory active</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="status-indicator status-waiting">🧠 General knowledge mode with context memory active</div>', unsafe_allow_html=True)
+        # Display chat history in scrollable container
+        st.markdown('<div class="scrollable-chat-container">', unsafe_allow_html=True)
+        display_chat_history()
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
         
         # Handle input
+        user_question = create_fixed_input()
         if user_question:
             handle_user_input(user_question)
             st.rerun()
         
-        # Display chat
-        display_chat_history()
-        
-        # Auto-scroll
-        if st.session_state.should_scroll:
+        # Auto-scroll when new message is added
+        if st.session_state.should_scroll or st.session_state.new_message:
             add_auto_scroll()
             st.session_state.should_scroll = False
+            st.session_state.new_message = False
     
     with col2:
-        # Right panel with all controls
-        st.markdown('<div class="right-panel">', unsafe_allow_html=True)
+        # Compact right panel
+        st.markdown('<div class="compact-right-panel">', unsafe_allow_html=True)
+        
+        # ChatGPT Mode Toggle
+        st.markdown('<div class="compact-section">', unsafe_allow_html=True)
+        st.markdown('<div class="compact-title">🎯 Mode</div>', unsafe_allow_html=True)
+        
+        mode_text = "ChatGPT Mode: ON" if st.session_state.chatgpt_mode else "ChatGPT Mode: OFF"
+        mode_color = "success" if st.session_state.chatgpt_mode else "secondary"
+        
+        if st.button(f"🔄 {mode_text}", key="toggle_chatgpt_mode", 
+                    help="Toggle ChatGPT-like conversational mode"):
+            st.session_state.chatgpt_mode = not st.session_state.chatgpt_mode
+            st.rerun()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
         
         # Response Length Section
-        st.markdown('<div class="panel-section">', unsafe_allow_html=True)
-        st.markdown('<div class="panel-title">📏 Response Length</div>', unsafe_allow_html=True)
+        st.markdown('<div class="compact-section">', unsafe_allow_html=True)
+        st.markdown('<div class="compact-title">📏 Length</div>', unsafe_allow_html=True)
         
-        length_options = ["short", "medium", "long"]
-        for length in length_options:
-            if st.button(length.title(), key=f"length_{length}", help=f"Set {length} responses"):
-                st.session_state.length_preference = length
-                st.success(f"✅ Set to {length} responses")
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            btn_style = "primary" if st.session_state.length_preference == "short" else "secondary"
+            if st.button("S", key="length_short", help="Short responses", type=btn_style):
+                st.session_state.length_preference = "short"
+                st.rerun()
+        with col_b:
+            btn_style = "primary" if st.session_state.length_preference == "medium" else "secondary"
+            if st.button("M", key="length_medium", help="Medium responses", type=btn_style):
+                st.session_state.length_preference = "medium"
+                st.rerun()
+        with col_c:
+            btn_style = "primary" if st.session_state.length_preference == "long" else "secondary"
+            if st.button("L", key="length_long", help="Long responses", type=btn_style):
+                st.session_state.length_preference = "long"
                 st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
         
         # Quick Actions Section
-        st.markdown('<div class="panel-section">', unsafe_allow_html=True)
-        st.markdown('<div class="panel-title">⚡ Quick Actions</div>', unsafe_allow_html=True)
+        st.markdown('<div class="compact-section">', unsafe_allow_html=True)
+        st.markdown('<div class="compact-title">⚡ Actions</div>', unsafe_allow_html=True)
         
-        if st.button("🌍 General Question", key="quick_general"):
-            st.info("💡 Ask me anything! I'll remember our conversation context.")
+        if not st.session_state.chatgpt_mode:
+            if st.button("📋 Summary", key="quick_summary", help="Summarize documents"):
+                if st.session_state.processed_docs:
+                    handle_user_input("Please provide a comprehensive summary of all the uploaded documents")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ Upload documents first")
         
-        if st.button("📋 Summarize Documents", key="quick_summary"):
-            if st.session_state.processed_docs:
-                handle_user_input("Please provide a comprehensive summary of all the uploaded documents")
-                st.rerun()
-            else:
-                st.warning("⚠️ Please upload documents first using the ➕ button")
-        
-        if st.button("🔍 Explain Topic", key="quick_explain"):
-            st.info("💡 Try asking: 'Explain artificial intelligence' - I'll remember for follow-up questions!")
-        
-        if st.button("📍 Scroll to Bottom", key="manual_scroll"):
-            st.session_state.should_scroll = True
-            st.rerun()
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Chat Controls Section
-        st.markdown('<div class="panel-section">', unsafe_allow_html=True)
-        st.markdown('<div class="panel-title">🎛️ Chat Controls</div>', unsafe_allow_html=True)
-        
-        if st.button("🗑️ Clear Current Chat", key="clear_chat"):
+        if st.button("🗑️ Clear", key="clear_chat", help="Clear current chat"):
             st.session_state.chat_history = []
-            # Clear context memory for current session
             if st.session_state.current_session_id in st.session_state.context_memory:
                 st.session_state.context_memory[st.session_state.current_session_id] = []
             save_current_session()
-            st.success("✅ Chat history cleared!")
             st.rerun()
         
-        if st.button("🔊 Read Last Response", key="text_to_speech"):
+        if st.button("🔊 Read", key="text_to_speech", help="Read last response"):
             if st.session_state.chat_history:
                 last_bot = [msg for msg in st.session_state.chat_history if msg["type"] == "bot"]
                 if last_bot:
@@ -733,26 +870,26 @@ def main():
                         engine.say(last_bot[-1]["content"])
                         engine.runAndWait()
                     except:
-                        st.error("❌ Text-to-speech not available")
-                else:
-                    st.warning("⚠️ No bot responses to read")
+                        st.error("❌ TTS unavailable")
             else:
-                st.warning("⚠️ No chat history available")
+                st.warning("⚠️ No chat history")
         
-        if st.button("📊 Toggle Statistics", key="toggle_stats"):
-            st.session_state.show_stats = not st.session_state.show_stats
-            st.rerun()
+        if not st.session_state.chatgpt_mode:
+            if st.button("📊 Stats", key="toggle_stats", help="Toggle statistics"):
+                st.session_state.show_stats = not st.session_state.show_stats
+                st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Stats Section
-        if st.session_state.show_stats:
-            st.markdown('<div class="panel-section">', unsafe_allow_html=True)
-            st.markdown('<div class="panel-title">📈 Chat Statistics</div>', unsafe_allow_html=True)
+        # Stats Section (hidden in ChatGPT mode)
+        if st.session_state.show_stats and not st.session_state.chatgpt_mode:
+            st.markdown('<div class="compact-section">', unsafe_allow_html=True)
+            st.markdown('<div class="compact-title">📈 Stats</div>', unsafe_allow_html=True)
             show_stats()
             st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
+
 
 if __name__ == '__main__':
     main()
